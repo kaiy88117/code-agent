@@ -487,6 +487,18 @@ class ContextManager:
                 "selected_durable_count": sum(
                     1 for note in selected_notes if (str(note.get("kind", "episodic")).strip() or "episodic") == "durable"
                 ),
+                "selected_explanations": [
+                    {
+                        "text": note["text"],
+                        "origin": str((note.get("retrieval_debug") or {}).get("origin", "")).strip() or "episodic",
+                        "reasons": list((note.get("retrieval_debug") or {}).get("reasons", [])),
+                        "matched_tags": list((note.get("retrieval_debug") or {}).get("matched_tags", [])),
+                        "matched_tokens": list((note.get("retrieval_debug") or {}).get("matched_tokens", [])),
+                        "score": dict((note.get("retrieval_debug") or {}).get("score", {})),
+                        "rank_tuple": list((note.get("retrieval_debug") or {}).get("rank_tuple", [])),
+                    }
+                    for note in selected_notes
+                ],
                 "raw_chars": rendered["relevant_memory"].raw_chars,
                 "rendered_chars": rendered["relevant_memory"].rendered_chars,
                 "rendered_notes": list(rendered["relevant_memory"].details.get("rendered_notes", [])),

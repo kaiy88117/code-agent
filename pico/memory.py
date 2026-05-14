@@ -154,7 +154,20 @@ class DurableMemoryStore:
                 if exact_tag_match == 0 and keyword_overlap == 0:
                     continue
                 recency = _parse_timestamp(note.get("created_at"))
-                ranked.append(((exact_tag_match, keyword_overlap, recency), note))
+                rank_tuple = (exact_tag_match, keyword_overlap, recency, -1)
+                ranked.append(
+                    (
+                        (exact_tag_match, keyword_overlap, recency),
+                        _build_retrieval_debug(
+                            note,
+                            origin="durable",
+                            query_tokens=query_tokens,
+                            note_tags=note_tags,
+                            note_tokens=note_tokens,
+                            rank_tuple=rank_tuple,
+                        ),
+                    )
+                )
         ranked.sort(key=lambda item: item[0], reverse=True)
         return [note for _, note in ranked[:limit]]
 
@@ -290,6 +303,33 @@ def _parse_timestamp(value):
         return datetime.fromisoformat(str(value)).timestamp()
     except Exception:
         return 0.0
+
+
+def _build_retrieval_debug(note, *, origin, query_tokens, note_tags, note_tokens, rank_tuple):
+    matched_tags = sorted(query_tokens & note_tags)
+    matched_tokens = sorted((query_tokens & note_tokens) - set(matched_tags))
+    reasons = []
+    if matched_tags:
+        reasons.append("tag_match")
+    if matched_tokens:
+        reasons.append("keyword_overlap")
+    score = {
+        "exact_tag_match": int(rank_tuple[0]) if len(rank_tuple) > 0 else 0,
+        "keyword_overlap": int(rank_tuple[1]) if len(rank_tuple) > 1 else 0,
+        "recency": float(rank_tuple[2]) if len(rank_tuple) > 2 else 0.0,
+        "note_index": int(rank_tuple[3]) if len(rank_tuple) > 3 else -1,
+    }
+    debug = {
+        "origin": str(origin).strip() or "episodic",
+        "reasons": reasons,
+        "matched_tags": matched_tags,
+        "matched_tokens": matched_tokens,
+        "score": score,
+        "rank_tuple": list(rank_tuple),
+    }
+    enriched = dict(note)
+    enriched["retrieval_debug"] = debug
+    return enriched
 
 
 def _normalize_note(note, index):
@@ -531,7 +571,20 @@ def retrieval_candidates(state, query, limit=3, workspace_root=None):
             continue
         recency = _parse_timestamp(note.get("created_at"))
         note_index = int(note.get("note_index", 0))
-        ranked.append(((exact_tag_match, keyword_overlap, recency, note_index), note))
+        rank_tuple = (exact_tag_match, keyword_overlap, recency, note_index)
+        ranked.append(
+            (
+                rank_tuple,
+                _build_retrieval_debug(
+                    note,
+                    origin="episodic",
+                    query_tokens=query_tokens,
+                    note_tags=note_tags,
+                    note_tokens=note_tokens,
+                    rank_tuple=rank_tuple,
+                ),
+            )
+        )
 
     if workspace_root is not None:
         durable_store = DurableMemoryStore(Path(workspace_root) / ".pico" / "memory")
@@ -541,7 +594,20 @@ def retrieval_candidates(state, query, limit=3, workspace_root=None):
             exact_tag_match = int(bool(query_tokens & note_tags))
             keyword_overlap = len(query_tokens & note_tokens)
             recency = _parse_timestamp(note.get("created_at"))
-            ranked.append(((exact_tag_match, keyword_overlap, recency, -1), note))
+            rank_tuple = (exact_tag_match, keyword_overlap, recency, -1)
+            ranked.append(
+                (
+                    rank_tuple,
+                    _build_retrieval_debug(
+                        note,
+                        origin="durable",
+                        query_tokens=query_tokens,
+                        note_tags=note_tags,
+                        note_tokens=note_tokens,
+                        rank_tuple=rank_tuple,
+                    ),
+                )
+            )
 
     ranked.sort(key=lambda item: item[0], reverse=True)
     return [note for _, note in ranked[:limit]]

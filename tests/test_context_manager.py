@@ -104,6 +104,15 @@ def test_context_manager_renders_top_three_episodic_notes_per_note_under_budget(
     assert metadata["relevant_memory"]["rendered_notes"][0].startswith("gamma episodi")
     assert metadata["relevant_memory"]["rendered_notes"][1].startswith("alpha episodi")
     assert metadata["relevant_memory"]["rendered_notes"][2].startswith("beta episodi")
+    selected_explanations = metadata["relevant_memory"]["selected_explanations"]
+    assert [item["text"] for item in selected_explanations] == metadata["relevant_memory"]["selected_notes"]
+    for item in selected_explanations:
+        assert item["origin"] == "episodic"
+        assert isinstance(item["reasons"], list)
+        assert isinstance(item["matched_tags"], list)
+        assert isinstance(item["matched_tokens"], list)
+        assert isinstance(item["score"], dict)
+        assert isinstance(item["rank_tuple"], list)
     relevant_section = prompt.split("Relevant memory:\n", 1)[1].split("\n\nTranscript:", 1)[0]
     assert len([line for line in relevant_section.splitlines() if line.startswith("- ")]) == 3
     assert "alpha episodi" in relevant_section
@@ -234,6 +243,12 @@ def test_context_manager_relevant_memory_can_mix_durable_notes(tmp_path):
 
     assert "Use constrained tools instead of guessing." in relevant_section
     assert any("Use constrained tools instead of guessing." in item for item in metadata["relevant_memory"]["selected_notes"])
+    durable_explanation = next(
+        item
+        for item in metadata["relevant_memory"]["selected_explanations"]
+        if "Use constrained tools instead of guessing." in item["text"]
+    )
+    assert durable_explanation["origin"] == "durable"
     assert metadata["relevant_memory"]["selected_durable_count"] == 1
     assert metadata["relevant_memory"]["selected_sources"] == ["project-conventions"]
     assert metadata["relevant_memory"]["selected_kinds"] == ["durable"]

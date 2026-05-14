@@ -39,6 +39,24 @@ def test_episodic_notes_append_and_retrieve_deterministically():
         "Older unrelated note",
     ]
 
+    candidates = memory.retrieval_candidates("recall memory", limit=4)
+    assert [note["text"] for note in candidates] == [
+        "Exact tag note",
+        "Keyword overlap note about memory",
+    ]
+
+    tag_match_note = candidates[0]
+    keyword_overlap_note = candidates[1]
+
+    assert "retrieval_debug" in tag_match_note
+    assert tag_match_note["retrieval_debug"]["origin"] == "episodic"
+    assert "tag_match" in tag_match_note["retrieval_debug"]["reasons"]
+    assert "recall" in tag_match_note["retrieval_debug"]["matched_tags"]
+    assert "retrieval_debug" in keyword_overlap_note
+    assert keyword_overlap_note["retrieval_debug"]["origin"] == "episodic"
+    assert "keyword_overlap" in keyword_overlap_note["retrieval_debug"]["reasons"]
+    assert "memory" in keyword_overlap_note["retrieval_debug"]["matched_tokens"]
+
     lines = [line for line in memory.retrieval_view("recall memory", limit=4).splitlines() if line.startswith("- ")]
     assert lines == [
         "- Exact tag note",
@@ -117,6 +135,13 @@ def test_durable_memory_index_and_topic_notes_are_loaded_and_retrieved(tmp_path)
 
     snapshot = memory.to_dict()
     assert snapshot["durable_topics"] == ["project-conventions"]
+
+    candidates = memory.retrieval_candidates("constrained tools", limit=4)
+    durable_note = next(note for note in candidates if "Use constrained tools instead of guessing." in note["text"])
+    assert durable_note["kind"] == "durable"
+    assert durable_note["retrieval_debug"]["origin"] == "durable"
+    assert "keyword_overlap" in durable_note["retrieval_debug"]["reasons"]
+    assert durable_note["retrieval_debug"]["matched_tokens"]
 
     lines = [line for line in memory.retrieval_view("constrained tools", limit=4).splitlines() if line.startswith("- ")]
     assert any("Use constrained tools instead of guessing." in line for line in lines)
